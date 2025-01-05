@@ -102,10 +102,10 @@ def check_user(user_id: int, username: str) -> str:
     return usr
 
 
-def get_active_directory_id(user_id: int) -> int:
-    cursor.execute(f"select active_dir_id from user " f"where id={user_id}")
-    dir_id = cursor.fetchone()
-    return dir_id[0]
+def set_root_as_active_dir(user_id: int) -> None:
+    cursor.execute(f"update user set active_dir_id=root_dir_id where id={user_id}")
+    conn.commit()
+
 
 
 def get_active_directory_name(user_id: int) -> str:
@@ -117,6 +117,15 @@ def get_active_directory_name(user_id: int) -> str:
         return dir_name[0]
     else:
         return None
+
+def get_active_directory_id(user_id: int) -> int:
+    cursor.execute(f"select COALESCE(active_dir_id, root_dir_id)"
+                   f" from user " f"where id={user_id}")
+    dir_id = cursor.fetchone()
+    if dir_id:
+        return dir_id[0]
+
+
 
 
 def check_unique(user_id: int, dir_name: str) -> bool:
@@ -192,15 +201,12 @@ def get_all_tasks(user_id: int) -> str | None:
     return s
 
 
-def set_root_as_active_dir(user_id: int) -> None:
-    cursor.execute(f"update user set active_dir_id=root_dir_id where id={user_id}")
-    conn.commit()
-
 
 def get_directory_context(user_id: int) -> str:
     cur_dir_name = get_active_directory_name(user_id)
     if cur_dir_name is None:
         set_root_as_active_dir(user_id)
+        cur_dir_name = "root"
     tasks = get_tasks(user_id)
     dirs = get_directories(user_id)
     s = f"\n{cur_dir_name}/\n"
@@ -279,3 +285,6 @@ def check_db_exists():
 
 
 check_db_exists()
+
+
+

@@ -100,6 +100,8 @@ def resolve_message(message: str, user_id: int) -> str | None:
         case "rmdir" | "уп":
             if parsed_message.arg == "":
                 return "Название папки не может быть пустым"
+            if parsed_message.arg == 'root':
+                return "Вы не можете удалить корневую директорию"
             if res := remove_dir(user_id, parsed_message.arg):
                 return res
             else:

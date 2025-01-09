@@ -15,8 +15,9 @@ def get_cursor():
 def mark_done(user_id: int, task_serial: int) -> bool:
     cursor.execute(
         f"update task set is_done=True "
-        f"where serial_number={task_serial} "
-        f"and user_id={user_id}"
+        f"where serial_number=? "
+        f"and user_id=?",
+        (task_serial, user_id)
     )
     changed_rows = cursor.rowcount
     conn.commit()
@@ -26,7 +27,7 @@ def mark_done(user_id: int, task_serial: int) -> bool:
 
 
 def get_dir_id_by_name(user_id: int, dir_name: str) -> int:
-    cursor.execute(f'select id from dir where name="{dir_name}" and user_id={user_id}')
+    cursor.execute(f'select id from dir where name="?" and user_id=?', (dir_name, user_id))
     return cursor.fetchone()[0]
 
 
@@ -35,7 +36,7 @@ def get_dirs_and_tasks_ids_under_dir(
 ):
     dirs.append(dir_id)
     cursor.execute(
-        "select id from dir where user_id=? " "and meta_dir_id=?", (user_id, dir_id)
+        "select id from dir where user_id=? and meta_dir_id=?", (user_id, dir_id)
     )
     for d in cursor.fetchall():
         get_dirs_and_tasks_ids_under_dir(dirs, tasks, user_id, d[0])
@@ -45,13 +46,12 @@ def get_dirs_and_tasks_ids_under_dir(
         tasks.append(t[0])
 
 
-# f"join dir ON user.active_dir_id = dir.id "
 def remove_dir(user_id: int, dir_name: str) -> str | None:
     dirs = []
     tasks = []
     dir_id = get_dir_id_by_name(user_id, dir_name)
     if dir_id is None:
-        return f"Отсутсвует папка {dir_name}"
+        return f"Папка {dir_name} отсутсвует"
 
     get_dirs_and_tasks_ids_under_dir(dirs, tasks, user_id, dir_id)
     if dirs:
@@ -68,9 +68,9 @@ def remove_dir(user_id: int, dir_name: str) -> str | None:
 
 
 def create_user(user_id: int, username: str) -> None:
-    cursor.execute(f"insert into dir (name, user_id) " f"values ('root',{user_id})")
+    cursor.execute(f"insert into dir (name, user_id) " f"values ('root',?)", (user_id, ))
     conn.commit()
-    cursor.execute(f"select id from dir where user_id={user_id}")
+    cursor.execute(f"select id from dir where user_id=?", (user_id, ))
 
     root_dir_id = cursor.fetchone()[0]
     if root_dir_id is not None:
@@ -85,7 +85,7 @@ def create_user(user_id: int, username: str) -> None:
 
 
 def get_user_by_id(user_id: int) -> str | None:
-    cursor.execute(f"select * from user where id={user_id}")
+    cursor.execute(f"select * from user where id=?", (user_id, ))
     usr = cursor.fetchone()
     if usr:
         return usr
@@ -95,7 +95,7 @@ def get_user_by_id(user_id: int) -> str | None:
 def check_user(user_id: int, username: str) -> str:
     usr = get_user_by_id(user_id)
     if usr:
-        return f"{usr}IN DA BASE"
+        return f"{usr} IN DA BASE"
     else:
         create_user(user_id, username)
     usr = get_user_by_id(user_id)
@@ -103,7 +103,7 @@ def check_user(user_id: int, username: str) -> str:
 
 
 def set_root_as_active_dir(user_id: int) -> None:
-    cursor.execute(f"update user set active_dir_id=root_dir_id where id={user_id}")
+    cursor.execute(f"update user set active_dir_id=root_dir_id where id=?", (user_id, ))
     conn.commit()
 
 
@@ -111,7 +111,7 @@ def set_root_as_active_dir(user_id: int) -> None:
 def get_active_directory_name(user_id: int) -> str:
     # FIXME add join
     dir_id = get_active_directory_id(user_id)
-    cursor.execute(f"select name from dir where id={dir_id}")
+    cursor.execute(f"select name from dir where id=?", (dir_id, ))
     dir_name = cursor.fetchone()
     if dir_name:
         return dir_name[0]
@@ -119,8 +119,8 @@ def get_active_directory_name(user_id: int) -> str:
         return None
 
 def get_active_directory_id(user_id: int) -> int:
-    cursor.execute(f"select COALESCE(active_dir_id, root_dir_id)"
-                   f" from user " f"where id={user_id}")
+    cursor.execute(f"select COALESCE(active_dir_id, root_dir_id) "
+                   f"from user where id=?", (user_id, ))
     dir_id = cursor.fetchone()
     if dir_id:
         return dir_id[0]
@@ -131,7 +131,8 @@ def get_active_directory_id(user_id: int) -> int:
 def check_unique(user_id: int, dir_name: str) -> bool:
     cursor.execute(
         f"select * from dir where "
-        f'exists (select * from dir where user_id={user_id} and name="{dir_name}")'
+        f"exists (select * from dir where user_id=? and name='?')",
+        (user_id, dir_name)
     )
     if cursor.fetchone():
         return False
@@ -142,7 +143,7 @@ def create_directory(dir_name: str, user_id: int) -> None | str:
     active_dir_id = get_active_directory_id(user_id)
     if check_unique(user_id, dir_name):
         cursor.execute(
-            f"insert into dir (name, user_id, meta_dir_id) " "values (?,?,?)",
+            f"insert into dir (name, user_id, meta_dir_id) values (?,?,?)",
             (dir_name, user_id, active_dir_id),
         )
         conn.commit()
@@ -153,7 +154,7 @@ def create_directory(dir_name: str, user_id: int) -> None | str:
 def get_directories(user_id: int) -> List[str]:
     active_dir_id = get_active_directory_id(user_id)
 
-    cursor.execute(f"select name from dir where meta_dir_id={active_dir_id}")
+    cursor.execute(f"select name from dir where meta_dir_id=?", (active_dir_id, ))
     res = cursor.fetchall()
     if not res:
         return []
@@ -161,7 +162,7 @@ def get_directories(user_id: int) -> List[str]:
 
 
 def get_tasks_max_serial(user_id: int) -> int:
-    cursor.execute(f"select max(serial_number) from task where user_id={user_id}")
+    cursor.execute(f"select max(serial_number) from task where user_id=?", (user_id, ))
     count = cursor.fetchone()
     return count[0] or 0
 
@@ -180,7 +181,7 @@ def create_task(content: str, user_id: int) -> None:
 def get_tasks(user_id: int) -> List[str]:
     dir_id = get_active_directory_id(user_id)
     cursor.execute(
-        f"select serial_number, content from task where dir_id={dir_id} and is_done=FALSE"
+        f"select serial_number, content from task where dir_id=? and is_done=FALSE", (dir_id, )
     )
     res = cursor.fetchall()
     if not res:
@@ -190,7 +191,9 @@ def get_tasks(user_id: int) -> List[str]:
 
 def get_all_tasks(user_id: int) -> str | None:
     cursor.execute(
-        f"select serial_number, content from task where user_id={user_id} and is_done=FALSE and dir_id not null"
+        f"select serial_number, content from task where user_id=?"
+        f" and is_done=FALSE and dir_id not null",
+        (user_id, )
     )
     res = cursor.fetchall()
     if not res:
@@ -222,16 +225,17 @@ def change_dir(user_id: int, dir_name: str) -> str | None:
     # active_dir_id = get_active_directory_id(user_id)
     cursor.execute(
         f"select id from dir "
-        f"where user_id={user_id} "
+        f"where user_id=? "
         # f"and root_dir_id={active_dir_id} "
         f"and meta_dir_id not null "
-        f"and name='{dir_name}'"
+        f"and name='?'",
+        (user_id, dir_name)
     )
     if (f := cursor.fetchone()) is None:
         return False
     new_dir_id = f[0]
 
-    cursor.execute(f"update user set active_dir_id={new_dir_id} where id={user_id}")
+    cursor.execute(f"update user set active_dir_id=? where id=?", (new_dir_id, user_id))
 
     conn.commit()
     return True
@@ -242,25 +246,26 @@ def change_dir_to_meta(user_id: int) -> None:
         f"select dir.meta_dir_id "
         f"from user "
         f"join dir ON user.active_dir_id = dir.id "
-        f"where user.id={user_id}"
+        f"where user.id=?",
+        (user_id, )
     )
     meta_dir_id = cursor.fetchone()[0]
     if meta_dir_id is None:
         return
 
-    cursor.execute(f"update user set active_dir_id={meta_dir_id} where id={user_id}")
+    cursor.execute(f"update user set active_dir_id=? where id=?", (meta_dir_id, user_id))
     conn.commit()
     return True
 
 
 def change_dir_to_root(user_id: int) -> None:
-    cursor.execute(f"select root_dir_id " f"from user where user.id={user_id}")
+    cursor.execute(f"select root_dir_id " f"from user where user.id=?", (user_id, ))
     root_dir_id = cursor.fetchone()[0]
     if root_dir_id is None:
         return
 
     cursor.execute(
-        f"update user " f"set active_dir_id={root_dir_id} where id={user_id}"
+        f"update user " f"set active_dir_id=? where id=?", (root_dir_id, user_id)
     )
     conn.commit()
 

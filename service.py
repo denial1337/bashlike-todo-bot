@@ -1,6 +1,5 @@
 import db
 from db import (
-    get_cursor,
     create_directory,
     get_directory_context,
     create_task,
@@ -9,7 +8,6 @@ from db import (
     get_all_tasks,
     change_dir_to_meta,
     get_user_by_id,
-    cursor,
     mark_done,
     remove_dir,
     get_dirs_and_tasks_ids_under_dir,
@@ -45,11 +43,12 @@ def parse_message(message: str) -> ParsedMessage | str:
     return parsed_message
 
 
-def ls(user_id):
-    return "```" + get_directory_context(user_id) + "```"
+async def ls(user_id):
+    context = await get_directory_context(user_id)
+    return "```" + context + "```"
 
 
-def resolve_message(message: str, user_id: int) -> str | None:
+async def resolve_message(message: str, user_id: int) -> str | None:
     parsed_message = parse_message(message)
     if isinstance(parsed_message, str):
         return parsed_message
@@ -57,58 +56,75 @@ def resolve_message(message: str, user_id: int) -> str | None:
         case "mkdir" | "сп":
             if parsed_message.arg == "":
                 return "Название папки не может быть пустым"
-            res = create_directory(parsed_message.arg, user_id)
+            res = await create_directory(parsed_message.arg, user_id)
             if res is None:
-                return ls(user_id)
+                cur_context = await ls(user_id)
+                return cur_context
             return res
 
         case "ls" | "че":
-            return ls(user_id)
+            cur_context = await ls(user_id)
+            return cur_context
 
         case "mktask" | "сз":
             if parsed_message.arg == "":
                 return "Название задачи не может быть пустым"
-            create_task(parsed_message.arg, user_id)
-            return ls(user_id)
+            await create_task(parsed_message.arg, user_id)
+            cur_context = await ls(user_id)
+            return cur_context
 
         case "tasks" | "вз":
-            tasks = get_all_tasks(user_id)
+            tasks = await get_all_tasks(user_id)
             if tasks is None:
                 return "Нет задач"
             return "```" + tasks + "```"
 
         case "cd" | "пп":
             if parsed_message.arg == "..":
-                change_dir_to_meta(user_id)
-                return ls(user_id)
+                await change_dir_to_meta(user_id)
+                cur_context = await ls(user_id)
+                return cur_context
+
             if parsed_message.arg == "":
-                change_dir_to_root(user_id)
-                return ls(user_id)
-            if not change_dir(user_id, parsed_message.arg):
+                res = await change_dir_to_root(user_id)
+                if not res is None:
+                    return
+                else:
+                    cur_context = await ls(user_id)
+                    return cur_context
+
+            res = await change_dir(user_id, parsed_message.arg)
+            if not res:
                 return f"Папки {parsed_message.arg} не существует"
             else:
-                return ls(user_id)
+                cur_context = await ls(user_id)
+                return cur_context
 
         case "done" | "зз":
             try:
                 task_serial = int(parsed_message.arg)
             except ValueError:
                 return "Чтобы завершить задачу введите её индекс"
-            if mark_done(user_id, task_serial):
-                return ls(user_id)
+            res = await mark_done(user_id, task_serial)
+            if res:
+                cur_context = await ls(user_id)
+                return cur_context
 
         case "rmdir" | "уп":
             if parsed_message.arg == "":
                 return "Название папки не может быть пустым"
-            if parsed_message.arg == 'root':
+            if parsed_message.arg == "root":
                 return "Вы не можете удалить корневую директорию"
-            if res := remove_dir(user_id, parsed_message.arg):
+            res = await remove_dir(user_id, parsed_message.arg)
+            if res:
                 return res
             else:
-                return ls(user_id)
+                cur_context = await ls(user_id)
+                return cur_context
 
         case "user":
-            return get_user_by_id(user_id)
+            res = await get_user_by_id(user_id)
+            return res
         case "test":
             pass
 

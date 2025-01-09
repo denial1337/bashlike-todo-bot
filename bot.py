@@ -9,7 +9,7 @@ import service
 from aiogram import F
 from dotenv import load_dotenv
 
-from db import get_user_by_id, get_directory_context, get_tasks
+from db import get_user_by_id, get_directory_context, get_tasks, check_db_exists
 from service import parse_message, resolve_message
 import db
 
@@ -33,7 +33,7 @@ async def cmd_start(message: types.Message):
     # print(message)
     user_id = message.from_user.id
     username = message.from_user.username
-    db.check_user(user_id, username)
+    await db.check_user(user_id, username)
     # await message.answer(f'HELLO {user_id}, {ans}')
     s = (
         f"Привет! Это BashLikeTODOBot! Он нужен для записи и хранения твоих задач.\n"
@@ -63,11 +63,11 @@ async def cmd_start(message: types.Message):
 @dp.message(F.text)
 async def handle_message(message: types.Message):
     user_id = message.from_user.id
-    user = get_user_by_id(user_id)
-    ans = parse_message(message.text)
-    resolve_ans = resolve_message(message.text, user_id)
+    # user = await get_user_by_id(user_id)
+    # ans = parse_message(message.text)
+    resolve_ans = await resolve_message(message.text, user_id)
     # context = get_directory_context(user_id)
-    tasks = get_tasks(user_id)
+    # tasks = get_tasks(user_id)
     if resolve_ans:
         await message.answer(f"{resolve_ans}")
 
@@ -79,6 +79,7 @@ async def create(message: types.Message, command: CommandObject):
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
+    await check_db_exists()
     await dp.start_polling(bot)
 
 

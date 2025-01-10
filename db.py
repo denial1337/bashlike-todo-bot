@@ -81,16 +81,17 @@ async def create_user(user_id: int, username: str) -> None:
             await db.commit()
 
             await cursor.execute(f"select id from dir where user_id=?", (user_id,))
-            root_dir_id = await cursor.fetchone()[0]
-            if root_dir_id is not None:
-                await cursor.execute(
-                    "insert into user (id, username, active_dir_id, root_dir_id) "
-                    "values (?,?,?,?)",
-                    (user_id, username, root_dir_id, root_dir_id),
-                )
-                await db.commit()
-            else:
-                print("PROBLEM in create_user")
+            res = await cursor.fetchone()
+            if res is None:
+                return
+            root_dir_id = res[0]
+
+            await cursor.execute(
+                "insert into user (id, username, active_dir_id, root_dir_id) "
+                "values (?,?,?,?)",
+                (user_id, username, root_dir_id, root_dir_id),
+            )
+            await db.commit()
 
 
 async def get_user_by_id(user_id: int) -> str | None:

@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters.command import Command, CommandObject
@@ -8,26 +7,25 @@ from aiogram.enums import ParseMode
 import service
 from aiogram import F
 from dotenv import load_dotenv
+from loguru import logger
 
 from db import get_user_by_id, get_directory_context, get_tasks, check_db_exists
 from service import parse_message, resolve_message
 import db
+from exception import MyException
 
 
 load_dotenv()
 
 api_token = os.environ["API_KEY"]
 
-
-# Включаем логирование, чтобы не пропустить важные сообщения
-logging.basicConfig(level=logging.INFO)
-# Объект бота
 bot = Bot(token=api_token, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
-# Диспетчер
 dp = Dispatcher()
 
+logger.remove()
+logger.add("info.log", format="{time} {level} {message}", level="INFO", rotation="10 MB")
 
-# Хэндлер на команду /start
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     # print(message)
@@ -60,15 +58,19 @@ async def cmd_start(message: types.Message):
     await message.answer(s)
 
 
+
 @dp.message(F.text)
 async def handle_message(message: types.Message):
     user_id = message.from_user.id
-    # user = await get_user_by_id(user_id)
-    # ans = parse_message(message.text)
-    resolve_ans = await resolve_message(message.text, user_id)
-    # context = get_directory_context(user_id)
-    # tasks = get_tasks(user_id)
-    if resolve_ans:
+    try:
+        resolve_ans = await resolve_message(message.text, user_id)
+    except MyException as e:
+        logger.info(f'got MyException={str(e)}')
+        await message.answer(str(e))
+    except Exception as e:
+        logger.info(f'got Exception={str(e)}')
+        await message.answer(str(e))
+    else:
         await message.answer(f"{resolve_ans}")
 
 
